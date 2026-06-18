@@ -1,9 +1,8 @@
 import streamlit as st
 
 # --- 1. SET UP THE MEMORY BANK (Session State) ---
-# If this is the first time loading, pre-populate our menu database
-if "menu_database" not in st.session_state:
-    st.session_state["menu_database"] = {
+if "simple_menu_db" not in st.session_state:
+    st.session_state["simple_menu_db"] = {
         "Chicken Fried Rice": {
             "recipe": {"Chicken": 0.25, "Rice": 0.50, "Egg": 1.00, "Soy Sauce": 1.50, "Oil": 1.00, "Scallions": 2.00},
             "price": 19.95
@@ -15,7 +14,7 @@ if "menu_database" not in st.session_state:
     }
 
 st.title("🍜 NYC Chinese Restaurant Cost Dashboard")
-st.markdown("Select a dish, customize ingredients, or add an entirely new recipe to the menu.")
+st.markdown("Track raw food costs and analyze your menu item profit margins.")
 
 # --- 2. THE WHOLESALE LEDGER (Sidebar) ---
 st.sidebar.header("Box Wholesale Ingredient Costs ($)")
@@ -52,38 +51,32 @@ with st.expander("➕ Add a Custom New Recipe to the Menu"):
         c_oil = st.number_input("Oil (oz)", min_value=0.0, value=0.0, key="c_ol")
         c_scallion = st.number_input("Scallions (count)", min_value=0.0, value=0.0, key="c_scl")
 
-    # Save button logic
     if st.button("Save Dish to Menu Selection"):
         if custom_name.strip() == "":
             st.error("Please enter a name for your custom dish.")
         else:
-            # Build the custom recipe object matching our database format
-            new_dish_data = {
+            st.session_state["simple_menu_db"][custom_name] = {
                 "recipe": {
                     "Chicken": c_chicken, "Beef": c_beef, "Rice": c_rice, "Noodles": c_noodles,
                     "Egg": c_egg, "Soy Sauce": c_soy, "Oil": c_oil, "Scallions": c_scallion
                 },
                 "price": custom_price
             }
-            # Append it straight into our browser memory bank!
-            st.session_state["menu_database"][custom_name] = new_dish_data
-            st.success(f"✅ '{custom_name}' added successfully! You can now select it in the drop-down menu above.")
+            st.success(f"✅ '{custom_name}' added successfully!")
             st.rerun()
 
 st.write("---")
 
 # --- 4. THE DYNAMIC DROP-DOWN MENU ---
 st.subheader("🍽️ Select a Menu Item to Evaluate")
-# Pull the keys (names) out of our session state database dynamically
-dish_options = list(st.session_state["menu_database"].keys())
+dish_options = list(st.session_state["simple_menu_db"].keys())
 selected_dish = st.selectbox("Choose a dish:", dish_options)
 
-# Load the active selected dish parameters out of memory
-active_recipe = st.session_state["menu_database"][selected_dish]["recipe"]
-active_price = st.session_state["menu_database"][selected_dish]["price"]
+active_recipe = st.session_state["simple_menu_db"][selected_dish]["recipe"]
+active_price = st.session_state["simple_menu_db"][selected_dish]["price"]
 
 # --- 5. ADJUST ACTIVE DISH RECIPE QUANTITIES ---
-st.markdown(f"### 🥣 Adjust Recipe Quantities for **{selected_dish}**")
+st.markdown(f"### 🥣 Adjust Quantities for **{selected_dish}**")
 recipe_qty = {}
 cols = st.columns(3)
 
@@ -95,7 +88,7 @@ for index, (ingredient, qty) in enumerate(active_recipe.items()):
 st.write("---")
 menu_price = st.number_input("🥡 Takeout Menu Price ($)", value=float(active_price), step=0.50, key="active_price_box")
 
-# --- 6. MATHEMATICAL BACKEND & CHARTS ---
+# --- 6. FOOD COST MATHEMATICAL BACKEND ---
 total_plate_cost = 0.0
 chart_data = {}
 
@@ -115,19 +108,21 @@ metric_col1.metric("Total Plate Cost", f"${total_plate_cost:.2f}")
 metric_col2.metric("Food Cost %", f"{food_cost_percentage:.1f}%")
 metric_col3.metric("Gross Profit/Plate", f"${gross_profit:.2f}")
 
+# Reset original status parameters (Targeting under 15% or 30% food cost benchmarks)
 if food_cost_percentage <= 15.0:
-    st.success("🟢 **STATUS: HIGHLY PROFITABLE**")
+    st.success("🟢 **STATUS: HIGHLY PROFITABLE** — Excellent raw margins to help balance high NYC rent.")
 elif food_cost_percentage <= 30.0:
-    st.warning("🟡 **STATUS: HEALTHY MARGIN**")
+    st.warning("🟡 **STATUS: HEALTHY MARGIN** — Standard restaurant benchmark. Keep an eye on ingredient pricing trends.")
 else:
-    st.error("🔴 **STATUS: WARNING - MARGIN TOO LOW**")
+    st.error("🔴 **STATUS: WARNING - MARGIN TOO LOW** — Raw food cost exceeds 30%. Consider adjusting the price or portion sizes.")
 
+# --- 7. CHARTS & SLIDERS ---
 st.write("---")
-st.subheader("📈 Expense Breakdown per Ingredient")
+st.subheader("📈 Total Cost Share per Ingredient")
 st.bar_chart(chart_data)
 
 st.write("---")
 st.subheader("💰 'What-If' Monthly Revenue Calculator")
 daily_orders = st.slider("Average Orders Sold Per Day:", min_value=0, max_value=200, value=50)
 monthly_keepable_profit = (daily_orders * 30) * gross_profit
-st.metric("Keepable Margin Profit (Monthly)", f"${monthly_keepable_profit:,.2f}", delta=f"${gross_profit:.2f} per box")
+st.metric("Keepable Net Profit (Monthly)", f"${monthly_keepable_profit:,.2f}", delta=f"${gross_profit:.2f} profit per box")
