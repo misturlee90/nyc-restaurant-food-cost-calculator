@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd  # <-- Added for spreadsheet data creation
 
 # --- 1. SET UP THE MEMORY BANK (Session State) ---
 if "expense_menu_db" not in st.session_state:
@@ -41,7 +42,7 @@ st.sidebar.write("---")
 st.sidebar.header("🧾 NYC Tax Configurations")
 nyc_sales_tax = st.sidebar.number_input("NYC Combined Sales Tax (%)", value=8.875, step=0.005, format="%.3f")
 
-# Define the user's specific operational targets as variables for calculations
+# Granular breakdown constants
 LABOR_PCT = 30.0
 RENT_PCT = 10.0
 UTILITIES_PCT = 5.0
@@ -121,7 +122,6 @@ for ingredient, qty in recipe_qty.items():
     if qty > 0:
         chart_data[ingredient] = item_cost
 
-# Granular breakdown calculations linked directly to your targets
 tax_cost = menu_price * (nyc_sales_tax / 100.0)
 labor_cost = menu_price * (LABOR_PCT / 100.0)
 rent_cost = menu_price * (RENT_PCT / 100.0)
@@ -131,11 +131,9 @@ marketing_cost = menu_price * (MARKETING_PCT / 100.0)
 tech_cost = menu_price * (TECH_PCT / 100.0)
 maintenance_cost = menu_price * (MAINTENANCE_PCT / 100.0)
 
-# Total operational costs combined
 non_food_operating_costs = tax_cost + labor_cost + rent_cost + utilities_cost + insurance_cost + marketing_cost + tech_cost + maintenance_cost
 total_true_cost = total_food_cost + non_food_operating_costs
 
-# Profit calculations
 food_cost_percentage = (total_food_cost / menu_price) * 100 if menu_price > 0 else 0
 true_net_takehome = menu_price - total_true_cost
 net_margin_percentage = (true_net_takehome / menu_price) * 100 if menu_price > 0 else 0
@@ -167,13 +165,43 @@ with st.expander("📄 View Complete Itemized Expense Allocation Table"):
     | **Final Net Take-Home Cash** | **{net_margin_percentage:.1f}%** | **${true_net_takehome:.2f}** |
     """)
 
+# --- 📥 EXPORT TO CSV MECHANISM ---
+# 1. Arrange the active math variables into a standard spreadsheet layout
+raw_spreadsheet_data = {
+    "Expense Category": [
+        "Takeout Menu Price", "Raw Ingredient Food Cost", "Kitchen Staff Labor", 
+        "NYC Sales Tax", "Rent & Occupancy", "Utilities", "Marketing & Promotions", 
+        "Insurance & Local Licenses", "Technology & POS Fees", "Repairs & Maintenance", "Final Net Take-Home Cash"
+    ],
+    "Percentage Share": [
+        "100.0%", f"{food_cost_percentage:.1f}%", f"{LABOR_PCT}%", f"{nyc_sales_tax}%", f"{RENT_PCT}%", 
+        f"{UTILITIES_PCT}%", f"{MARKETING_PCT}%", f"{INSURANCE_PCT}%", f"{TECH_PCT}%", f"{MAINTENANCE_PCT}%", f"{net_margin_percentage:.1f}%"
+    ],
+    "Allocation per Box ($)": [
+        menu_price, total_food_cost, labor_cost, tax_cost, rent_cost, 
+        utilities_cost, marketing_cost, insurance_cost, tech_cost, maintenance_cost, true_net_takehome
+    ]
+}
+
+# 2. Convert it into a formal data matrix, then compile it into a raw string file layout
+df = pd.DataFrame(raw_spreadsheet_data)
+csv_string = df.to_csv(index=False).encode('utf-8')
+
+# 3. Create the layout link button on the dashboard interface
+st.download_button(
+    label="📥 Download Profit Breakdown Worksheet (CSV)",
+    data=csv_string,
+    file_name=f"{selected_dish.lower().replace(' ', '_')}_financials.csv",
+    mime="text/csv"
+)
+
 # Financial Health Alerts
 if net_margin_percentage >= 15.0:
-    st.success(f"🟢 **STATUS: PROFITABLE ENTERPRISE** — Yielding a safe {net_margin_percentage:.1f}% take-home cushion. This dish generates excellent positive cash flow.")
+    st.success(f"🟢 **STATUS: PROFITABLE ENTERPRISE** — Yielding a safe {net_margin_percentage:.1f}% take-home cushion.")
 elif net_margin_percentage >= 5.0:
-    st.warning(f"🟡 **STATUS: TIGHT MARGINS** — The item is surviving, but food inflation or shift overstaffing could push it into a loss quickly.")
+    st.warning(f"🟡 **STATUS: TIGHT MARGINS** — The item is surviving, but margins are narrow.")
 else:
-    st.error(f"🔴 **STATUS: LOSING MONEY** — Your net margins have dropped to {net_margin_percentage:.1f}%. The owner is losing cash on every order due to high operational burdens.")
+    st.error(f"🔴 **STATUS: LOSING MONEY** — The owner is losing cash on every order due to high operational burdens.")
 
 # --- 7. CHARTS & SLIDERS ---
 st.write("---")
@@ -184,4 +212,3 @@ st.write("---")
 st.subheader("💰 'What-If' Monthly Revenue Calculator")
 daily_orders = st.slider("Average Orders Sold Per Day:", min_value=0, max_value=200, value=50)
 monthly_takehome_profit = (daily_orders * 30) * true_net_takehome
-st.metric("Net Take-Home Cash (Monthly)", f"${monthly_takehome_profit:,.2f}", delta=f"${true_net_takehome:.2f} clean cash per box")
